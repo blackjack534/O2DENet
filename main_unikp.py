@@ -126,15 +126,13 @@ def extract_split_features(model, dataloader, device, feat_hook: FeatureExtracto
     ys = []
 
     for batch in dataloader:
-        # 这里按你原本 trainer 的 batch 形式来：一般 graph_collate_func 会返回 (batched_graph, labels, ...)
-        # 你需要根据实际 batch 结构调整下面两行解包。
+
         if isinstance(batch, (tuple, list)):
             g = batch[0]
             y = batch[1]
         else:
             raise RuntimeError("Unexpected batch type; please adapt unpacking logic.")
 
-        # 将输入送入 device（DGLGraph 通常有自己的 to(device)）
         try:
             g = g.to(device)
         except Exception:
@@ -143,7 +141,6 @@ def extract_split_features(model, dataloader, device, feat_hook: FeatureExtracto
         if torch.is_tensor(y):
             y = y.to(device)
 
-        # 触发 forward（输出本身不重要，重要的是 hook 抓到的中间特征）
         _ = model(g)
 
         if feat_hook.last_feat is None:
@@ -213,7 +210,6 @@ def stage2_train_extratrees(feature_dir: str, output_dir: str):
     X_val, y_val = load_split_npz(feature_dir, "val")
     X_test, y_test = load_split_npz(feature_dir, "test")
 
-    # ExtraTreesRegressor: 常用稳健默认值（你也可以外部传参）
     reg = ExtraTreesRegressor(
         n_estimators=1000,
         random_state=0,
@@ -285,9 +281,7 @@ def build_datasets(cfg, task):
 
 
 def build_loaders(cfg, train_dataset, val_dataset, test_dataset, for_feature_extraction=False):
-    """
-    for_feature_extraction=True 时，建议不 shuffle，drop_last=False
-    """
+
     if torch.cuda.device_count() > 1:
         params = {
             'batch_size': cfg.SOLVER.BATCH_SIZE,
@@ -444,7 +438,6 @@ def main():
     # Stage 2: train ExtraTreesRegressor on extracted features
     if args.stage in ['2', 'all']:
         rank, is_main = _get_rank_and_main()
-        # ExtraTrees 在 DDP 下只需要 rank0 跑即可
         if is_main:
             stage2_out = os.path.join(output_dir, "extratrees")
             stage2_train_extratrees(feature_dir, stage2_out)
